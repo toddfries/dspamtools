@@ -14,6 +14,8 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+PATH=$PATH:/usr/local/sbin
+
 logdir=/var/dspam
 
 # give longer running tspam processes a chance to start if one or more
