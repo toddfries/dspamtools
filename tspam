@@ -121,7 +121,8 @@ relearn)
 					continue
 				fi
 				logger "relearn spam h=$header s=$signature"
-				dodspam --class=spam $args --signature="$signature"
+				#dodspam --class=spam $args --signature="$signature"
+				dspam_sigstash spam $signature
 			done
 		}
 	;;
@@ -133,12 +134,14 @@ relearn)
 					continue
 				fi
 				logger "relearn ham h=$header s=$signature"
-				dodspam --class=innocent $args --signature="$signature"
+				#dodspam --class=innocent $args --signature="$signature"
+				dspam_sigstash innocent $signature
 			done
 		}
 	;;
 	inoculation)
 		dodspam --process --class=spam --source=inoculation --user $user
+		# stash whole messages for innoculation!
 	;;
 	esac
 ;;
