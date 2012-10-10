@@ -1,0 +1,78 @@
+#!/usr/bin/perl
+
+# Copyright (c) 2012 Todd T. Fries <todd@fries.net>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+use strict;
+use warnings;
+
+use FDC::db;
+#use DBI qw(:sql_types);
+
+use OpenBSD::Getopt;
+
+our $opt_v = 0;
+
+getopts('v');
+
+our $verbose = $opt_v;
+
+if ($verbose > 0) {
+	$| = 1; # Enable autoflush, to help with ordered output/debugging
+}
+
+my $action = $ARGV[0];
+my $sig = $ARGV[1];
+
+#printf "action = %s, sig = %s\n", $action, $sig;
+our $dsn = "dbi:SQLite:dbname=/var/dspam/sigdb/sigs.db";
+
+my $db = FDC::db->new($dsn,"","") ||
+	die "Could not open $dsn: $@";
+my $dbh = $db->getdbh();
+my @tables = $dbh->tables();
+
+my $sigtab = "signatures";
+my $create_sigtab = 1;
+foreach my $tname (@tables) {
+	if ($tname =~ m/\"${sigtab}\"/) {
+		$create_sigtab = 0;
+	}
+}
+
+my $query;
+if ($create_sigtab > 0) {
+	$query = "CREATE TABLE ${sigtab} (id integer PRIMARY KEY AUTOINCREMENT, ".
+	    "action varchar(16), sig varchar(28))";
+	$db->doquery($query) || die "Unable to create ${sigtab}: $@";
+}
+
+$query = sprintf "INSERT into %s (action, sig) values ('%s', '%s')", $sigtab, $action, $sig;
+if ($verbose > 0) {
+	printf STDERR "query: %s\n",$query;
+}
+my $sth;
+while (1) {
+	if (! ($sth = $db->doquery($query, 'insert sig'))) {
+		next;
+	}
+	if (!defined($sth) || $sth == -1) {
+		next;
+	}
+	last;
+}
+
+$sth->finish;
+$dbh->disconnect;
+exit(0);
