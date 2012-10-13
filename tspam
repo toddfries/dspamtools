@@ -122,7 +122,7 @@ relearn)
 					logger "relearn spam Message-Id: $signature"
 					continue
 				fi
-				logger "relearn spam h=$header s=$signature"
+				logger "relearn spam h=$header s=$signature (calling sigstash)"
 				#dodspam --class=spam $args --signature="$signature"
 				dspam_sigstash spam $signature
 			done
@@ -135,7 +135,7 @@ relearn)
 					logger "relearn spam Message-Id: $signature"
 					continue
 				fi
-				logger "relearn ham h=$header s=$signature"
+				logger "relearn ham h=$header s=$signature (calling sigstash)"
 				#dodspam --class=innocent $args --signature="$signature"
 				dspam_sigstash innocent $signature
 			done
