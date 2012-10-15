@@ -35,9 +35,9 @@ if (!defined($pid)) {
 my @skipheaders;
 while(<STDIN>) {
 	# do not train based on X-(DSPAM|FDH)- headers, so show them below
-	if (/^X-DSPAM-/ || /^X-FDH-/) {
+	if (/^X-o?DSPAM-/ || /^X-o?FDH-/) {
 		my $line = $_;
-		$line =~ s/(DSPAM|FDH)-/o${1}-/;
+		$line =~ s/-(DSPAM|FDH)-/-o${1}-/;
 		push @skipheaders,$line;
 		next;
 	}
