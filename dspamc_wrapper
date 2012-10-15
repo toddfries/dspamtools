@@ -1,0 +1,74 @@
+#!/usr/bin/perl
+
+# Copyright (c) 2012 Todd T. Fries <todd@fries.net>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+use strict;
+use warnings;
+
+use IPC::Open2;
+use FileHandle;
+
+# Is there a better way to insert a header than to futz in this way?
+
+my $rcpt = $ARGV[0];
+my $envfrom = $ARGV[1];
+
+my $cmd = "/usr/local/bin/dspamc --client --stdout --deliver=innocent,spam --user $rcpt";
+
+my ($fhread, $fhwrite);
+my $pid = open2($fhread,$fhwrite,${cmd});
+if (!defined($pid)) {
+	die "Can't fork: $!";
+}
+my @skipheaders;
+while(<STDIN>) {
+	# do not train based on X-(DSPAM|FDH)- headers, so show them below
+	if (/^X-DSPAM-/ || /^X-FDH-/) {
+		my $line = $_;
+		$line =~ s/(DSPAM|FDH)-/o${1}-/;
+		push @skipheaders,$line;
+		next;
+	}
+	$fhwrite->print($_);
+}
+$fhwrite->flush();
+$fhwrite->close();
+
+# states:
+#
+# 0 = starting
+# 1 = Seen first header
+
+
+my $state = 0;
+while(<$fhread>) {
+	if ($state == 0) {
+		print $_;
+		printf "X-FDH-EnvFrom: %s\n", $envfrom;
+		printf "X-FDH-EnvTo: %s\n", $rcpt;
+		foreach my $h (@skipheaders) {
+			printf "%s", $h;
+		}
+		$state++;
+		next;
+	}
+	print $_;
+}
+$fhread->close();
+
+if (waitpid($pid, 0) != $pid) {
+	exit(1);
+}
+exit(0);
