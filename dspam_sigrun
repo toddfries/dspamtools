@@ -86,16 +86,14 @@ $sth->finish;
 # XXX check errors?  Or 'better to run a sig multiple times' in the event of an error?
 $query = "delete from signatures where ";
 
-my $i = 0;
+
+my $qrmid;
 for $id (@rmids) {
-	if ($i++ > 0) {
-		$query .= " or ";
+	$qrmid = "$query id = $id";
+	$sth = $db->doquery($qrmid);
+	if (defined($sth)) {
+		$sth->finish;
 	}
-	$query .= "id = $id";
-}
-if ($i > 0) {
-	$sth = $db->doquery($query);
-	$sth->finish;
 }
 $db->doquery("vacuum");
 $dbh->disconnect;
