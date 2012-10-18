@@ -1,0 +1,79 @@
+#!/bin/ksh
+
+# Copyright (c) 2012 Todd T. Fries <todd@fries.net>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# The purpose of this script is to train dspam via checking if a message
+# would be classified properly first, and if not, train in innoculation
+# mode 10 times, and check again.  If not, repeat until it does.
+
+msgcount=0
+inoculations=0
+type=""
+user=""
+
+while [ "$1" ]
+do
+	case "$1" in
+	-t)
+		type=$2
+		shift
+	;;
+	-u)
+		user=$2
+		shift
+	;;
+	*)
+		break
+	;;
+	esac
+	shift
+done
+
+if ! [ "$type" ]; then
+	echo "Must give '-t type' on the cmdline, types supported are"
+	echo "spam and innocent"
+	exit 1
+fi
+if ! [ "$user" ]; then
+	echo "must give '-u user' on the cmdline. For example:  -u user@example.com"
+	exit 1
+fi
+
+for f in "$@"
+do
+	((msgcount++))
+	egrep -v "^X-(DSPAM|oDSPAM|FDH|oFDH)" $f > $f.tmp
+	while :
+	do
+		printf "%4d: %s\n" $msgcount "$f"
+		printf "%4d: Testing\n" $msgcount
+		dspamc --client --classify --user $user < $f.tmp | \
+			tee result
+		grep -iv "result=\"$type\"" result > /dev/null 2>&1 || break
+		grep -iv "class=\"$type\"" result > /dev/null 2>&1 || break
+		printf "%4d: Training" $msgcount
+		i=0
+		while [ i -lt 10 ]
+		do
+			echo -n .
+			dspamc --process --class=$type --source=inoculation --mode=teft --user $user < $f.tmp
+			((i++))
+		done
+		((inoculations+i))
+		echo "done."
+	done
+	rm $f.tmp
+done
+echo "Handled $msgcount messages and gave $inoculations inoculations for $type class."
