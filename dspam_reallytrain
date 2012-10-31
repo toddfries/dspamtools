@@ -59,10 +59,16 @@ do
 	do
 		printf "%4d: %s\n" $msgcount "$f"
 		printf "%4d: Testing\n" $msgcount
+		if false; then
 		dspamc --client --classify --user $user < $f.tmp | \
 			tee result
 		grep -iv "result=\"$type\"" result > /dev/null 2>&1 || break
-		grep -iv "class=\"$type\"" result > /dev/null 2>&1 || break
+		#grep -iv "class=\"$type\"" result > /dev/null 2>&1 || break
+		else
+		dspamc --client --stdout --deliver=innocent,spam --user $user \
+		    < $f.tmp | grep "^X-DSPAM-Result" | tee result
+		grep -iv "result: $type" > /dev/null 2>&1 || break
+		fi
 		printf "%4d: Training" $msgcount
 		i=0
 		while [ i -lt 10 ]
