@@ -56,7 +56,9 @@ if ($create_sigtab > 0) {
 }
 
 $query = sprintf "SELECT count(id) from %s", $sigtab;
-my ($count) = $db->do_oneret_query($query);
+my $sth = $db->doquery($query);
+my ($count) = $sth->fetchrow_array;
+$sth->finish;
 printf "About to process %d rows\n",$count;
 
 $query = sprintf "SELECT id, action, sig from %s", $sigtab;
@@ -83,7 +85,8 @@ while (($id, $act, $sig) = $sth->fetchrow_array) {
 
 $sth->finish;
 
-# XXX check errors?  Or 'better to run a sig multiple times' in the event of an error?
+# XXX check errors?  Or 'better to run a sig multiple times' in the event of
+# an error?
 $query = "delete from signatures where ";
 
 
