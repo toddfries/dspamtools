@@ -1,4 +1,4 @@
-sbins= dspam_sigrun dspam_sigstash tspam
+sbins= dspam_sigrun dspam_sigstash tspam cleandspamdb
 
 install:
 	install -m 555 dspamc_wrapper /usr/local/bin
