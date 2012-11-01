@@ -65,19 +65,21 @@ $query = sprintf "SELECT id, action, sig from %s", $sigtab;
 if ($verbose > 0) {
 	printf STDERR "query: %s\n",$query;
 }
-my $sth;
 if (! ($sth = $db->doquery($query, 'query sig'))) {
 	exit(1);
 }
 if (!defined($sth) || $sth == -1) {
 	exit(1);
 }
+$count = 0;
 my ($id, $act, $sig, @rmids);
 while (($id, $act, $sig) = $sth->fetchrow_array) {
-	printf "id %d, action %s, sig %s\n", $id, $act, $sig;
+	printf "%3d. id %d, action %s, sig %s\n", ++$count, $id, $act, $sig;
 	if ($act eq "innocent" || $act eq "spam") {
 		my $cmd = sprintf "/usr/local/bin/dspamc --class=%s --source=error --mode=teft --user root --signature=%s",$act,$sig;
-		printf "cmd: %s\n",$cmd;
+		if ($verbose > 0) {
+			printf "cmd: %s\n",$cmd;
+		}
 		system($cmd);
 		push @rmids,$id;
 	}
