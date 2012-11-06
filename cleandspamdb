@@ -19,11 +19,6 @@ user=dspam
 
 [ -f /etc/dspam.env ] && . /etc/dspam.env
 
-HOME=~_pgbackup
-(
-ulimit -n unlimited
-ulimit -m unlimited
-ulimit -s unlimited
-ulimit -l unlimited
-time sh -c "/usr/local/bin/psql -U$user $db < /etc/dspam.purge"
-) 2>&1 | logger -p daemon.info -t cleandspamdb
+eval HOME=~$USER
+time sh -c "/usr/local/bin/psql -U$user $db < /etc/dspam.purge" 2>&1 | \
+	logger -p daemon.info -t cleandspamdb
