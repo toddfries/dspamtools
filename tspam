@@ -142,8 +142,8 @@ relearn)
 		}
 	;;
 	inoculation)
-		dodspam --process --class=spam --source=inoculation --user $user
-		# stash whole messages for innoculation!
+		#dodspam --process --class=spam --source=inoculation --user $user
+		dspam_sigstash inoculation
 	;;
 	esac
 ;;
