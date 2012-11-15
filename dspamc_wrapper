@@ -32,19 +32,31 @@ my $pid = open2($fhread,$fhwrite,${cmd});
 if (!defined($pid)) {
 	die "Can't fork: $!";
 }
-my @skipheaders;
+my @headers;
+my @body;
+my $state = 0; # 0 = headers, 1 = body
 while(<STDIN>) {
+	my $line = $_;
 	# do not train based on X-(DSPAM|FDH)- headers, so show them below
-	if (/^X-o?DSPAM-/ || /^X-o?FDH-/) {
-		my $line = $_;
-		$line =~ s/-(DSPAM|FDH)-/-o${1}-/;
-		push @skipheaders,$line;
+	if ($state == 0) {
+		if (/^$/) {
+			$state++;
+			$fhwrite->print($_);
+			next;
+		}
+		if (/^X-o?DSPAM-/ || /^X-o?FDH-/) {
+			$line =~ s/-(DSPAM|FDH)-/-o${1}-/;
+			push @headers,$line;
+			next;
+		}
+		push @headers,$line;
+		$fhwrite->print($_);
 		next;
 	}
+	push @body,$line;
 	$fhwrite->print($_);
 }
 $fhwrite->flush();
-$fhwrite->close();
 
 # states:
 #
@@ -52,21 +64,29 @@ $fhwrite->close();
 # 1 = Seen first header
 
 
-my $state = 0;
+$state = 0;
 while(<$fhread>) {
 	if ($state == 0) {
-		print $_;
-		printf "X-FDH-EnvFrom: %s\n", $envfrom;
-		printf "X-FDH-EnvTo: %s\n", $rcpt;
-		foreach my $h (@skipheaders) {
-			printf "%s", $h;
+		if (/^X-DSPAM/) {
+			push @headers,$_;
 		}
-		$state++;
-		next;
+		if (/^$/) {
+			$state++;
+			last;
+		}
 	}
-	print $_;
+	next;
 }
 $fhread->close();
+$fhwrite->close();
+foreach my $h (@headers) {
+	printf "%s", $h;
+}
+printf "X-FDH-EnvFrom: %s\n", $envfrom;
+printf "X-FDH-EnvTo: %s\n\n", $rcpt;
+foreach my $b (@body) {
+	printf "%s", $b;
+}
 
 if (waitpid($pid, 0) != $pid) {
 	exit(1);
