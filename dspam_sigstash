@@ -18,7 +18,7 @@ use strict;
 use warnings;
 
 use FDC::db;
-#use DBI qw(:sql_types);
+use DBI qw(:sql_types);
 
 use OpenBSD::Getopt;
 
@@ -44,10 +44,15 @@ my $dbh = $db->getdbh();
 my @tables = $dbh->tables();
 
 my $sigtab = "signatures";
+my $inoctab = "inoculations";
 my $create_sigtab = 1;
+my $create_inoctab = 1;
 foreach my $tname (@tables) {
 	if ($tname =~ m/\"${sigtab}\"/) {
 		$create_sigtab = 0;
+	}
+	if ($tname =~ m/\"${inoctab}\"/) {
+		$create_inoctab = 0;
 	}
 }
 
@@ -57,12 +62,27 @@ if ($create_sigtab > 0) {
 	    "action varchar(16), sig varchar(28))";
 	$db->doquery($query) || die "Unable to create ${sigtab}: $@";
 }
-
+if ($create_inoctab > 0) {
+	$query = "CREATE TABLE ${inoctab} (".
+	    "id integer PRIMARY KEY AUTOINCREMENT, ".
+	    "message TEXT)";
+	$db->doquery($query) || die "Unable to create ${inoctab}: $@";
+}
+my $sth;
+if ($action eq "inoculation") {
+	$query = sprintf "INSERT into %s (message) values (?)", $inoctab;
+	$sth = $db->{dbh}->prepare($query);
+	my $message = "";
+	while(<STDIN>) {
+		$message .= $_;
+	}
+	$sth->bind_param(1, $message, SQL_CHAR);
+	$sth->execute;
+} else {
 $query = sprintf "INSERT into %s (action, sig) values ('%s', '%s')", $sigtab, $action, $sig;
 if ($verbose > 0) {
 	printf STDERR "query: %s\n",$query;
 }
-my $sth;
 while (1) {
 	if (! ($sth = $db->doquery($query, 'insert sig'))) {
 		next;
@@ -72,7 +92,7 @@ while (1) {
 	}
 	last;
 }
-
+}
 $sth->finish;
 $dbh->disconnect;
 exit(0);
