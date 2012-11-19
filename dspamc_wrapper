@@ -25,12 +25,31 @@ use FileHandle;
 my $rcpt = $ARGV[0];
 my $envfrom = $ARGV[1];
 
+my $config_file = "/etc/dspamwrap.conf";
+
+my $skiptore;
+
+if (-f $config_file) {
+	eval {
+		eval `cat $config_file`;
+	}
+}
+
+my $scan = 1;
+if (defined($skiptore)) {
+	if ($rcpt =~ m/${skiptore}/) {
+		$scan = 0;
+	}
+}
+
 my $cmd = "/usr/local/bin/dspamc --client --stdout --deliver=innocent,spam --user $rcpt";
 
-my ($fhread, $fhwrite);
-my $pid = open2($fhread,$fhwrite,${cmd});
-if (!defined($pid)) {
-	die "Can't fork: $!";
+my ($fhread, $fhwrite, $pid);
+if ($scan) {
+	$pid = open2($fhread,$fhwrite,${cmd});
+	if (!defined($pid)) {
+		die "Can't fork: $!";
+	}
 }
 my @headers;
 my @body;
@@ -41,7 +60,9 @@ while(<STDIN>) {
 	if ($state == 0) {
 		if (/^$/) {
 			$state++;
-			$fhwrite->print($_);
+			if ($scan) {
+				$fhwrite->print($_);
+			}
 			next;
 		}
 		if (/^X-o?DSPAM-/ || /^X-o?FDH-/) {
@@ -50,35 +71,41 @@ while(<STDIN>) {
 			next;
 		}
 		push @headers,$line;
-		$fhwrite->print($_);
+		if ($scan) {
+			$fhwrite->print($_);
+		}
 		next;
 	}
 	push @body,$line;
-	$fhwrite->print($_);
-}
-$fhwrite->flush();
-$fhwrite->close();
-
-# states:
-#
-# 0 = starting
-# 1 = Seen first header
-
-
-$state = 0;
-while(<$fhread>) {
-	if ($state == 0) {
-		if (/^X-DSPAM/) {
-			push @headers,$_;
-		}
-		if (/^$/) {
-			$state++;
-			last;
-		}
+	if ($scan) {
+		$fhwrite->print($_);
 	}
-	next;
 }
-$fhread->close();
+if ($scan) {
+	$fhwrite->flush();
+	$fhwrite->close();
+
+	# states:
+	#
+	# 0 = starting
+	# 1 = Seen first header
+	
+	
+	$state = 0;
+	while(<$fhread>) {
+		if ($state == 0) {
+			if (/^X-DSPAM/) {
+				push @headers,$_;
+			}
+			if (/^$/) {
+				$state++;
+				last;
+			}
+		}
+		next;
+	}
+	$fhread->close();
+}
 foreach my $h (@headers) {
 	printf "%s", $h;
 }
@@ -88,7 +115,9 @@ foreach my $b (@body) {
 	printf "%s", $b;
 }
 
-if (waitpid($pid, 0) != $pid) {
-	exit(1);
+if ($scan) {
+	if (waitpid($pid, 0) != $pid) {
+		exit(1);
+	}
 }
 exit(0);
