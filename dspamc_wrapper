@@ -57,6 +57,7 @@ while(<STDIN>) {
 	$fhwrite->print($_);
 }
 $fhwrite->flush();
+$fhwrite->close();
 
 # states:
 #
@@ -78,7 +79,6 @@ while(<$fhread>) {
 	next;
 }
 $fhread->close();
-$fhwrite->close();
 foreach my $h (@headers) {
 	printf "%s", $h;
 }
