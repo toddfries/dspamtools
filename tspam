@@ -26,7 +26,10 @@ i=0
 start=$(date +"%m%d %H:%M:%S")
 starts=$(date +%s)
 count=$(( $(pgrep dspamc|wc -w) + 0 ))
-echo "$start tspam[$$]: $@ (start) dspamc=$count maxtries=$maxtries" >> $logdir/tspam.log
+log() {
+	echo "$@" | logger -p daemon.info
+}
+log "$start tspam[$$]: $@ (start) dspamc=$count maxtries=$maxtries"
 [ count -gt 0 ] && sleep $(( 2 + $RANDOM % 3 ))
 
 # do not run duplicate dspamc clients, the MTA should retry
@@ -41,7 +44,7 @@ do
 done
 if ! [ count -lt max ]; then
 	stops=$(date +%s)
-	echo "$(date +"%m%d %H:%M:%S") tspam[$$]: $@ (giving up), after $i tries ($((stops-starts))s) since $start, exiting 75" >> $logdir/tspam.log
+	log "tspam[$$]: $@ (giving up), after $i tries ($((stops-starts))s) since $start, exiting 75"
 	#cat > /dev/null
 	#sleep 5
 	exit 75
@@ -86,8 +89,8 @@ args="$args --feature=chained,noise,whitelist,tb=5"
 scriptargs="$@"
 
 logger() {
-	str="$(date +"%m%d %H:%M:%S") tspam[$$]: $@"
-	echo "$str" >> $logdir/tspam.log
+	str="tspam[$$]: $@"
+	log "$str"
 }
 
 dodspam() {
