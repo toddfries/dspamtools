@@ -27,9 +27,12 @@ start=$(date +"%m%d %H:%M:%S")
 starts=$(date +%s)
 count=$(( $(pgrep dspamc|wc -w) + 0 ))
 log() {
-	echo "$@" | logger -p daemon.info
+	echo "$@" | /usr/bin/logger -p daemon.info -t tspam
 }
-log "$start tspam[$$]: $@ (start) dspamc=$count maxtries=$maxtries"
+logit() {
+	log "$$: $@"
+}
+logit "$@ (start) dspamc=$count maxtries=$maxtries"
 [ count -gt 0 ] && sleep $(( 2 + $RANDOM % 3 ))
 
 # do not run duplicate dspamc clients, the MTA should retry
@@ -44,7 +47,7 @@ do
 done
 if ! [ count -lt max ]; then
 	stops=$(date +%s)
-	log "tspam[$$]: $@ (giving up), after $i tries ($((stops-starts))s) since $start, exiting 75"
+	logit "$@ (giving up), after $i tries ($((stops-starts))s) since $start, exiting 75"
 	#cat > /dev/null
 	#sleep 5
 	exit 75
@@ -88,10 +91,6 @@ args="$args --feature=chained,noise,whitelist,tb=5"
 
 scriptargs="$@"
 
-logger() {
-	str="tspam[$$]: $@"
-	log "$str"
-}
 
 dodspam() {
 	cmd="dspamc $@"
@@ -99,13 +98,13 @@ dodspam() {
 	sh -c "time $cmd" 2> $td/time
 	ret=$?
 	output=$(sed 's/[ ][ ]*/ /g;s/^ //;s/ $//' $td/time)
-	logger "$cmd"
+	logit "$cmd"
 	$cmd
 	wc=$(( $(wc -l < $td/time) - 1)) # one line for time is ok, more is not
 	oldret=$ret
 	[ wc -gt ret ] && ret=$wc
 	stops=$(date +%s)
-	logger "$scriptargs time=$((mids-starts)):$((stops-mids)):$((stops-starts)) r=$oldret:$ret l=$LOGNAME u=$user t=$i"
+	logit "$scriptargs time=$((mids-starts)):$((stops-mids)):$((stops-starts)) r=$oldret:$ret l=$LOGNAME u=$user t=$i"
 
 	return $ret
 }
@@ -122,10 +121,10 @@ relearn)
 		egrep "^X-DSPAM-Signature|^Message-Id" | {
 			while read header signature; do
 				if [ "$header" = "Message-Id:" ]; then
-					logger "relearn spam Message-Id: $signature"
+					logit "relearn spam Message-Id: $signature"
 					continue
 				fi
-				logger "relearn spam h=$header s=$signature (calling sigstash)"
+				logit "relearn spam h=$header s=$signature (calling sigstash)"
 				#dodspam --class=spam $args --signature="$signature"
 				dspam_sigstash spam $signature
 			done
@@ -135,10 +134,10 @@ relearn)
 		egrep "^X-DSPAM-Signature|^Message-Id" | {
 			while read header signature; do
 				if [ "$header" = "Message-Id:" ]; then
-					logger "relearn spam Message-Id: $signature"
+					logit "relearn spam Message-Id: $signature"
 					continue
 				fi
-				logger "relearn ham h=$header s=$signature (calling sigstash)"
+				logit "relearn ham h=$header s=$signature (calling sigstash)"
 				#dodspam --class=innocent $args --signature="$signature"
 				dspam_sigstash innocent $signature
 			done
@@ -169,8 +168,8 @@ if [ ret -gt 0 ]; then
 	#sleep 200
 	cat > /dev/null
 	stops=$(date +%s)
-	logger "(stop) ret=$ret start=$start tries=$i time=($stops - $starts)=>$((stops-starts))s exit=75"
+	logit "(stop) ret=$ret start=$start tries=$i time=($stops - $starts)=>$((stops-starts))s exit=75"
 	exit 75 # EX_TEMPFAIL for the MTA to retry
 fi
-logger "(stop) ret=$ret start=$start tries=$i time=$((stops-starts))s exit=0"
+logit "(stop) ret=$ret start=$start tries=$i time=$((stops-starts))s exit=0"
 exit 0
