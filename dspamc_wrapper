@@ -17,13 +17,11 @@
 use strict;
 use warnings;
 
-use IPC::Open2;
-use FileHandle;
-
 # Is there a better way to insert a header than to futz in this way?
 
 my $rcpt = $ARGV[0];
 my $envfrom = $ARGV[1];
+my $verbose = 0;
 
 my $config_file = "/etc/dspamwrap.conf";
 
@@ -42,26 +40,58 @@ if (defined($skiptore)) {
 	}
 }
 
-my $cmd = "/usr/local/bin/dspamc --client --stdout --deliver=innocent,spam --user $rcpt";
 
 my ($fhread, $fhwrite, $pid);
+if ($verbose > 0) {
+	printf STDERR "scan=%d\n",$scan;
+}
 if ($scan) {
+	use IPC::Open2;
+	use FileHandle;
+
+	$SIG{'PIPE'} = 'IGNORE';
+
+	my $cmd = sprintf "%s --client --stdout --deliver=innocent,spam --user %s",
+	    "/usr/local/bin/dspamc",$rcpt;
+	if ($verbose > 0) {
+		printf STDERR "cmd=%d\n",$cmd;
+	}
+
 	$pid = open2($fhread,$fhwrite,${cmd});
 	if (!defined($pid)) {
 		die "Can't fork: $!";
+	}
+	if ($verbose > 0) {
+		printf STDERR "pid=%d\n",$pid;
 	}
 }
 my @headers;
 my @body;
 my $state = 0; # 0 = headers, 1 = body
+my $linecount = 0;
 while(<STDIN>) {
 	my $line = $_;
+	if ($verbose > 0 && ($linecount++ % 1000) == 0) {
+		printf STDERR "made it to line %d\n",$linecount;
+	}
 	# do not train based on X-(DSPAM|FDH)- headers, so show them below
 	if ($state == 0) {
 		if (/^$/) {
 			$state++;
 			if ($scan) {
-				$fhwrite->print($_);
+				if ($verbose > 0) {
+					printf STDERR "pre-fhwrite: %s",$_;
+				}
+				eval {
+					$fhwrite->print($_);
+				};
+				if ($@) {
+					printf STDERR "FHWRITE failed: %s\n",$@;
+				}
+				if ($verbose > 0) {
+					printf STDERR "post-fhwrite: %s",$_;
+				}
+
 			}
 			next;
 		}
@@ -72,18 +102,36 @@ while(<STDIN>) {
 		}
 		push @headers,$line;
 		if ($scan) {
-			$fhwrite->print($_);
+			eval {
+				$fhwrite->print($_);
+			};
+			if ($@) {
+				printf STDERR "FHWRITE failed: %s\n",$@;
+			}
 		}
 		next;
 	}
 	push @body,$line;
 	if ($scan) {
-		$fhwrite->print($_);
+		eval {
+			$fhwrite->print($_);
+		};
+		if ($@) {
+			printf STDERR "FHWRITE failed: %s\n",$@;
+		}
 	}
 }
+if ($verbose > 0) {
+	print STDERR "STDIN reading done\n";
+}
 if ($scan) {
-	$fhwrite->flush();
-	$fhwrite->close();
+	eval {
+		$fhwrite->flush();
+		$fhwrite->close();
+	};
+	if ($@) {
+		printf STDERR "FHWRITE failed: %s\n",$@;
+	}
 
 	# states:
 	#
@@ -92,6 +140,7 @@ if ($scan) {
 	
 	
 	$state = 0;
+	eval {
 	while(<$fhread>) {
 		if ($state == 0) {
 			if (/^X-DSPAM/) {
@@ -105,6 +154,10 @@ if ($scan) {
 		next;
 	}
 	$fhread->close();
+	};
+	if ($@) {
+		printf STDERR "FHREAD failed: %s\n",$@;
+	}
 }
 foreach my $h (@headers) {
 	printf "%s", $h;
@@ -116,8 +169,17 @@ foreach my $b (@body) {
 }
 
 if ($scan) {
-	if (waitpid($pid, 0) != $pid) {
-		exit(1);
+	my $ret = waitpid($pid, 0);
+	
+	if ($verbose > 0) {
+		printf STDERR "waitpid returned %d: status=$? native=${^CHILD_ERROR_NATIVE}\n",$ret;
 	}
+	if ($ret == $pid) {
+		exit(0);
+	}
+	if ($ret == -1) {
+		exit(0);
+	}
+	exit(1);
 }
 exit(0);
