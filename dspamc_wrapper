@@ -95,7 +95,7 @@ while(<STDIN>) {
 			}
 			next;
 		}
-		if (/^X-o?DSPAM-/ || /^X-o?FDH-/) {
+		if ($scan == 1 && (/^X-o?DSPAM-/ || /^X-o?FDH-/)) {
 			$line =~ s/-(DSPAM|FDH)-/-o${1}-/;
 			push @headers,$line;
 			next;
