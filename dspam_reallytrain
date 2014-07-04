@@ -67,7 +67,11 @@ do
 		else
 		dspamc --client --stdout --deliver=innocent,spam --user $user \
 		    < $f.tmp | grep "^X-DSPAM-Result" | tee result
-		grep -iv "result: $type" > /dev/null 2>&1 || break
+		if grep -i "result: $type" result > /dev/null 2>&1; then
+			echo "Found $type, no training necessary"
+			cat result
+			break
+		fi
 		fi
 		printf "%4d: Training" $msgcount
 		i=0
