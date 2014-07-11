@@ -32,10 +32,6 @@ if ($verbose > 0) {
 	$| = 1; # Enable autoflush, to help with ordered output/debugging
 }
 
-my $action = $ARGV[0];
-my $sig = $ARGV[1];
-
-#printf "action = %s, sig = %s\n", $action, $sig;
 our $dsn = "dbi:SQLite:dbname=/var/dspam/sigdb/sigs.db";
 
 my $db = FDC::db->new($dsn,"","") ||
@@ -68,33 +64,39 @@ if ($create_inoctab > 0) {
 	    "message TEXT)";
 	$db->doquery($query) || die "Unable to create ${inoctab}: $@";
 }
-my $sth;
-if ($action eq "inoculation") {
-	$query = sprintf "INSERT into %s (message) values (?)", $inoctab;
-	$sth = $db->{dbh}->prepare($query);
-	my $message = "";
-	while(<STDIN>) {
-		$message .= $_;
+
+my $action = shift @ARGV;
+while (@ARGV) {
+	my $sig = shift @ARGV;
+
+	my $sth;
+	if ($action eq "inoculation") {
+		$query = sprintf "INSERT into %s (message) values (?)", $inoctab;
+		$sth = $db->{dbh}->prepare($query);
+		my $message = "";
+		while(<STDIN>) {
+			$message .= $_;
+		}
+		$sth->bind_param(1, $message, SQL_CHAR);
+		$sth->execute;
+	} else {
+		$query = sprintf "INSERT into %s (action, sig) values ('%s', '%s')", $sigtab, $action, $sig;
+		if ($verbose > 0) {
+			printf STDERR "query: %s\n",$query;
+		}
+		while (1) {
+			if (! ($sth = $db->doquery($query, 'insert sig'))) {
+				sleep(1);
+				next;
+			}
+			if (!defined($sth) || $sth == -1) {
+				sleep(1);
+				next;
+			}
+			last;
+		}
 	}
-	$sth->bind_param(1, $message, SQL_CHAR);
-	$sth->execute;
-} else {
-$query = sprintf "INSERT into %s (action, sig) values ('%s', '%s')", $sigtab, $action, $sig;
-if ($verbose > 0) {
-	printf STDERR "query: %s\n",$query;
+	$sth->finish;
 }
-while (1) {
-	if (! ($sth = $db->doquery($query, 'insert sig'))) {
-		sleep(1);
-		next;
-	}
-	if (!defined($sth) || $sth == -1) {
-		sleep(1);
-		next;
-	}
-	last;
-}
-}
-$sth->finish;
 $dbh->disconnect;
 exit(0);
