@@ -36,6 +36,11 @@ if (-f $config_file) {
 	}
 }
 
+if (!defined($rcpt) || !defined($envfrom)) {
+	print STDERR "Usage: dspamc_wrapper <rcpt> <from>\n";
+	exit(1);
+}
+
 if ($scan == 1 && defined($skiptore)) {
 	if ($rcpt =~ m/${skiptore}/) {
 		$scan = 0;
