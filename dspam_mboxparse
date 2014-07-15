@@ -1,0 +1,225 @@
+#!/usr/bin/perl
+
+# Copyright (c) 2014 Todd T. Fries <todd@fries.net>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# headers
+
+# X-FDH-EnvFrom || X-FDH-MailScanner-From
+# X-FDH-EnvTo   || To: || Received:...for <user@example.com>
+
+# purpose of this script is to take an mbox mail archive and (re)train it as spam or ham
+
+# foreach mail message
+#   check: headers (parse X-FDH-EnvFrom, etc)
+#   if EnvTo
+#     if no X-DSPAM-Signature header
+#       run through dspamc_wrapper, goto check;
+#     else
+#       dspam_sigstash
+#   else
+#    punt? how can we do anything if we don't know who it is for?
+#   fi
+# endfor
+
+# Example usage
+
+# dspam_mboxparse spam < /path/to/mboxfile
+
+use strict;
+use warnings;
+
+use OpenBSD::Getopt;
+
+our $opt_v = 0;
+our $opt_t = ""; # default to if none found
+our $opt_d = ""; # mbox for when things are done being trained
+our $opt_r = ""; # mbox for when things are needing to be retried
+our $opt_P; # to send back through procmail, nothing else
+
+getopts('vt:d:r:P');
+
+our $verbose = $opt_v;
+
+if ($verbose > 0) {
+	$| = 1; # Enable autoflush, to help with ordered output/debugging
+}
+
+my @headers = ("X-FDH-MailScanner-From",
+	"X-FDH-EnvFrom", "X-FDH-EnvTo",
+	"X-DSPAM-Signature" );
+
+my $action = $ARGV[0];
+
+our $to;
+our %hdrinfo;
+our $hdrlines;
+our $body;
+our $state;
+our $savebody;
+
+sub init_state {
+	$to = "";
+	$state = 0;
+	%hdrinfo = ( );
+	$hdrlines = "";
+	$body = "";
+	$savebody = 0;
+}
+
+sub to_or_bust {
+	my $to = $hdrinfo{"X-FDH-EnvTo"};
+	if (!defined($to)) {
+		$to = $opt_t;
+	}
+	return $to;
+}
+
+sub from_or_bust {
+	my $from = $hdrinfo{"X-FDH-EnvFrom"};
+	if (!defined($from)) {
+		$from = $hdrinfo{"X-FDH-MailScanner-From"};
+	}
+	if (!defined($from)) {
+		$from = $hdrinfo{"from"};
+	}
+	return $from;
+}
+
+sub dspam_classify {
+	my ($hdrs,$body)  = @_;
+
+	my $to = to_or_bust();
+	my $from = from_or_bust();
+
+	if (!defined($to) || !defined($from)) {
+		print STDERR "dspam_classify: from or to are undef, bailing\n";
+		return;
+	}
+	if (defined($opt_P)) {
+		my $cmd = "/usr/local/bin/procmail -Y -f $from rcpt=$to envfrom=$from rule=parsemail";
+		print STDERR "Command: ",$cmd,"\n";
+		open(M,"|$cmd");
+		print M $hdrs;
+		print M "\n";
+		print M $body;
+		close(M);
+		return;
+	}
+	my $td;
+	chomp($td = `mktemp -d /tmp/.dspam_mboxparse.XXXXXXXXXX`);
+	open(M,"|/usr/local/bin/dspamc_wrapper $to $from > $td/msg");
+	print M $hdrs;
+	print M "\n";
+	print M $body;
+	close(M);
+
+	open(M, "${td}/msg");
+	my $class_state = 0;
+	my $line;
+	my $res;
+	my $sig;
+	while(<M>) {
+		chomp($line = $_);
+		if ($class_state == 0) {
+			if ($line =~ /^$/) {
+				$class_state++;
+				last;
+			}
+			if ($line =~ /^X-DSPAM-Result: (.*)$/) {
+				$res = $1;
+				if ($res eq "Spam") {
+					$res = "spam";
+				} elsif ($res =~ /(Innocent|Whitelisted)/) {
+					$res = "ham";
+				} else {
+					printf STDERR "Result '%s' unhandled\n", $res;
+				}
+			} elsif ($line =~ /^X-DSPAM-Signature: (.*)$/) {
+				$sig = $1;
+			}
+		
+		}
+	}
+	close(M);
+
+	if (!defined($sig) || !defined($res)) {
+		print STDERR "Failed to get sig or result\n";
+		return;
+	}
+
+	if ($action eq $res) {
+		print STDERR "Result is what we wanted! (",$action,")\n";
+		return;
+	}
+	print STDERR "Running sigstash to re-train\n";
+	printf STDERR "dspam_sigstash %s %s\n", $action, $sig;
+}
+
+init_state();
+
+my $line;
+while (<STDIN>) {
+	chomp($line = $_);
+	if ($line =~ /^From /) {
+		if ($savebody == 1) {
+			dspam_classify($hdrlines,$body);
+		}
+		init_state();
+		if ($verbose > 0) {
+			print STDERR "New Message: ",$line,"\n";
+			$line =~ /^From\s+([^\s]*)\s/;
+			$hdrinfo{'from'} = $1;
+		}
+	}
+	if ($state == 0) {
+		if ($line =~ /^$/) {
+			$state++;
+			$to = to_or_bust();
+			if (defined($to)) {
+				$savebody = 0;
+				my $sig = $hdrinfo{"X-DSPAM-Signature"};
+				if (!defined($sig)) {
+					$savebody = 1;
+					next;
+				}
+				print STDERR "dspam_sigstash ",$action," ",$sig,"\n";
+				next;
+			}
+			print STDERR "Skipping message, no receipient found\n";
+			next;
+		}
+		foreach my $h (@headers) {
+			if ($line =~ /^$h: (.*)$/) {
+				if (defined($1)) {
+					$hdrinfo{$h} = $1;
+				}
+				last;
+			}
+		}
+		if ($line =~ /^X-(DSPAM|FDH)/) {
+			#push @savehdrs,$line;
+		} else {
+			$hdrlines .= $line."\n";
+		}
+		next;
+	}
+	if ($savebody == 1) {
+		$body .= $line."\n";
+	}
+}
+
+if ($savebody = 1 && length($hdrlines) > 0 && length($body) > 0) {
+	dspam_classify($hdrlines, $body);
+}
