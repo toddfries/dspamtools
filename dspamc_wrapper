@@ -17,6 +17,8 @@
 use strict;
 use warnings;
 
+use Sys::Syslog qw(:standard :macros);
+
 # Is there a better way to insert a header than to futz in this way?
 
 my $rcpt = $ARGV[0];
@@ -40,10 +42,11 @@ if ($scan == 1 && defined($skiptore)) {
 	}
 }
 
+openlog("dspamc_wrapper", "ndelay,pid", "mail");
 
 my ($fhread, $fhwrite, $pid);
 if ($verbose > 0) {
-	printf STDERR "scan=%d\n",$scan;
+	syslog(LOG_INFO, sprintf("scan=%d\n",$scan));
 }
 if ($scan) {
 	use IPC::Open2;
@@ -54,7 +57,7 @@ if ($scan) {
 	my $cmd = sprintf "%s --client --stdout --deliver=innocent,spam --user %s",
 	    "/usr/local/bin/dspamc",$rcpt;
 	if ($verbose > 0) {
-		printf STDERR "cmd=%d\n",$cmd;
+		syslog(LOG_INFO,sprintf("cmd=%d\n",$cmd));
 	}
 
 	$pid = open2($fhread,$fhwrite,${cmd});
@@ -62,7 +65,7 @@ if ($scan) {
 		die "Can't fork: $!";
 	}
 	if ($verbose > 0) {
-		printf STDERR "pid=%d\n",$pid;
+		syslog(LOG_INFO,sprintf("pid=%d\n",$pid));
 	}
 }
 my @headers;
@@ -72,7 +75,7 @@ my $linecount = 0;
 while(<STDIN>) {
 	my $line = $_;
 	if ($verbose > 0 && ($linecount++ % 1000) == 0) {
-		printf STDERR "made it to line %d\n",$linecount;
+		syslog(LOG_INFO,sprintf("made it to line %d\n",$linecount));
 	}
 	# do not train based on X-(DSPAM|FDH)- headers, so show them below
 	if ($state == 0) {
@@ -80,16 +83,16 @@ while(<STDIN>) {
 			$state++;
 			if ($scan) {
 				if ($verbose > 0) {
-					printf STDERR "pre-fhwrite: %s",$_;
+					syslog(LOG_INFO,sprintf("pre-fhwrite: %s",$_));
 				}
 				eval {
 					$fhwrite->print($_);
 				};
 				if ($@) {
-					printf STDERR "FHWRITE failed: %s\n",$@;
+					syslog(LOG_INFO,sprintf("FHWRITE failed: %s\n",$@));
 				}
 				if ($verbose > 0) {
-					printf STDERR "post-fhwrite: %s",$_;
+					syslog(LOG_INFO,sprintf("post-fhwrite: %s",$_));
 				}
 
 			}
@@ -106,7 +109,7 @@ while(<STDIN>) {
 				$fhwrite->print($_);
 			};
 			if ($@) {
-				printf STDERR "FHWRITE failed: %s\n",$@;
+				syslog(LOG_INFO,sprintf("FHWRITE failed: %s\n",$@));
 			}
 		}
 		next;
@@ -117,7 +120,7 @@ while(<STDIN>) {
 			$fhwrite->print($_);
 		};
 		if ($@) {
-			printf STDERR "FHWRITE failed: %s\n",$@;
+			syslog(LOG_INFO,sprintf("FHWRITE failed: %s\n",$@));
 		}
 	}
 }
@@ -130,7 +133,7 @@ if ($scan) {
 		$fhwrite->close();
 	};
 	if ($@) {
-		printf STDERR "FHWRITE failed: %s\n",$@;
+		syslog(LOG_INFO,sprintf("FHWRITE failed: %s\n",$@));
 	}
 
 	# states:
@@ -156,7 +159,7 @@ if ($scan) {
 	$fhread->close();
 	};
 	if ($@) {
-		printf STDERR "FHREAD failed: %s\n",$@;
+		syslog(LOG_INFO,sprintf("FHREAD failed: %s\n",$@));
 	}
 }
 foreach my $h (@headers) {
@@ -172,7 +175,7 @@ if ($scan) {
 	my $ret = waitpid($pid, 0);
 	
 	if ($verbose > 0) {
-		printf STDERR "waitpid returned %d: status=$? native=${^CHILD_ERROR_NATIVE}\n",$ret;
+		syslog(LOG_INFO,sprintf("waitpid returned %d: status=$? native=${^CHILD_ERROR_NATIVE}\n",$ret));
 	}
 	if ($ret == $pid) {
 		exit(0);
