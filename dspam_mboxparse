@@ -58,7 +58,7 @@ if ($verbose > 0) {
 
 my @headers = ("X-FDH-MailScanner-From",
 	"X-FDH-EnvFrom", "X-FDH-EnvTo",
-	"X-DSPAM-Signature" );
+	"X-DSPAM-Signature", "Return-Path" );
 
 my $action = $ARGV[0];
 
@@ -90,6 +90,9 @@ sub from_or_bust {
 	my $from = $hdrinfo{"X-FDH-EnvFrom"};
 	if (!defined($from)) {
 		$from = $hdrinfo{"X-FDH-MailScanner-From"};
+	}
+	if (!defined($from)) {
+		$from = $hdrinfo{"Return-Path"};
 	}
 	if (!defined($from)) {
 		$from = $hdrinfo{"from"};
