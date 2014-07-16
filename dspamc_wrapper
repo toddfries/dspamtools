@@ -21,9 +21,13 @@ use Sys::Syslog qw(:standard :macros);
 
 # Is there a better way to insert a header than to futz in this way?
 
+my $verbose = 0;
+if ($ARGV[0] eq "-v") {
+	shift @ARGV;
+}
+
 my $rcpt = $ARGV[0];
 my $envfrom = $ARGV[1];
-my $verbose = 0;
 
 my $config_file = "/etc/dspamwrap.conf";
 
