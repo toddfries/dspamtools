@@ -90,7 +90,7 @@ sub to_or_bust {
 	if (!defined($to)) {
 		$to = $opt_t;
 	}
-	return $to;
+	return scrub_email($to);
 }
 
 sub from_or_bust {
@@ -104,7 +104,19 @@ sub from_or_bust {
 	if (!defined($from)) {
 		$from = $hdrinfo{"from"};
 	}
-	return $from;
+	return scrub_email($from);
+}
+
+sub scrub_email {
+	my ($email) = @_;
+
+	if (!defined($email)) {
+		return $email;
+	}
+	$email =~ s/^\s*//;
+	$email =~ s/\s*$//;
+	$email =~ s/^.*<(.*)>.*$/$1/;
+	return $email;
 }
 
 sub dspam_classify {
