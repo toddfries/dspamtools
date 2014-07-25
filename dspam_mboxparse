@@ -61,6 +61,9 @@ my @headers = ("X-FDH-MailScanner-From",
 	"X-DSPAM-Signature", "Return-Path" );
 
 my $action = $ARGV[0];
+if (!defined($action)) {
+	$action = "none";
+}
 
 our $to;
 our %hdrinfo;
@@ -75,7 +78,11 @@ sub init_state {
 	%hdrinfo = ( );
 	$hdrlines = "";
 	$body = "";
-	$savebody = 0;
+	if (defined($opt_P)) {
+		$savebody = 1;
+	} else {
+		$savebody = 0;
+	}
 }
 
 sub to_or_bust {
@@ -107,7 +114,17 @@ sub dspam_classify {
 	my $from = from_or_bust();
 
 	if (!defined($to) || !defined($from)) {
-		print STDERR "dspam_classify: from or to are undef, bailing\n";
+		if (!defined($to)) {
+			print STDERR "dspam_classify: to is undef\n";
+		} else {
+			printf STDERR "dspam_classify: to is %s\n", $to;
+		}
+		if (!defined($from)) {
+			print STDERR "dspam_classify: from is undef\n";
+		} else {
+			printf STDERR "dspam_classify: from is %s\n",$from;
+		}
+		print STDERR "dspam_classify: bailing\n";
 		return;
 	}
 	if (defined($opt_P)) {
@@ -191,10 +208,15 @@ while (<STDIN>) {
 			$state++;
 			$to = to_or_bust();
 			if (defined($to)) {
-				$savebody = 0;
+				if (!defined($opt_P)) {
+					$savebody = 0;
+				}	
 				my $sig = $hdrinfo{"X-DSPAM-Signature"};
 				if (!defined($sig)) {
 					$savebody = 1;
+					next;
+				}
+				if ($action eq "none") {
 					next;
 				}
 				print STDERR "dspam_sigstash ",$action," ",$sig,"\n";
@@ -207,6 +229,8 @@ while (<STDIN>) {
 			if ($line =~ /^$h: (.*)$/) {
 				if (defined($1)) {
 					$hdrinfo{$h} = $1;
+					printf STDERR " header.. %s: %s\n",
+					    $h,$1;
 				}
 				last;
 			}
@@ -225,4 +249,7 @@ while (<STDIN>) {
 
 if ($savebody = 1 && length($hdrlines) > 0 && length($body) > 0) {
 	dspam_classify($hdrlines, $body);
+} else {
+	printf STDERR "savebody=%d, length(hdrlines)=%d length(body)=%d\n",
+		$savebody, length($hdrlines), length($body);
 }
