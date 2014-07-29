@@ -32,35 +32,35 @@ if ($verbose > 0) {
 	$| = 1; # Enable autoflush, to help with ordered output/debugging
 }
 
-our $dsn = "dbi:SQLite:dbname=/var/dspam/sigdb/sigs.db";
+our $dsn = "dbi:Pg:dbname=dspam;host=db.freedaemonhosting.com";
 
-my $db = FDC::db->new($dsn,"","") ||
+my $db = FDC::db->new($dsn,"dspam","") ||
 	die "Could not open $dsn: $@";
 my $dbh = $db->getdbh();
 my @tables = $dbh->tables();
 
-my $sigtab = "signatures";
-my $inoctab = "inoculations";
+my $sigtab = "fdhsignatures";
+my $inoctab = "fdhinoculations";
 my $create_sigtab = 1;
 my $create_inoctab = 1;
 foreach my $tname (@tables) {
-	if ($tname =~ m/\"${sigtab}\"/) {
+	if ($tname =~ m/${sigtab}/) {
 		$create_sigtab = 0;
 	}
-	if ($tname =~ m/\"${inoctab}\"/) {
+	if ($tname =~ m/${inoctab}/) {
 		$create_inoctab = 0;
 	}
 }
 
 my $query;
 if ($create_sigtab > 0) {
-	$query = "CREATE TABLE ${sigtab} (id integer PRIMARY KEY AUTOINCREMENT, ".
+	$query = "CREATE TABLE ${sigtab} (id serial, ".
 	    "action varchar(16), sig varchar(28))";
 	$db->doquery($query) || die "Unable to create ${sigtab}: $@";
 }
 if ($create_inoctab > 0) {
 	$query = "CREATE TABLE ${inoctab} (".
-	    "id integer PRIMARY KEY AUTOINCREMENT, ".
+	    "id serial, ".
 	    "message TEXT)";
 	$db->doquery($query) || die "Unable to create ${inoctab}: $@";
 }
