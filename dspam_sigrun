@@ -98,7 +98,7 @@ $sth->finish;
 
 # XXX check errors?  Or 'better to run a sig multiple times' in the event of
 # an error?
-$query = "delete from signatures where ";
+$query = "delete from ${sigtab} where ";
 
 printf "About to delete %d signatures just processed\n", scalar(@rmids);
 
