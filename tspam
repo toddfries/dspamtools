@@ -78,7 +78,7 @@ relearn)
 	shift
 	case "$1" in
 	spam)
-		egrep "^X-DSPAM-Signature|^Message-Id" | {
+		egrep "^X-DSPAM-Signature|^Message-Id" | (
 			while read header signature; do
 				if [ "$header" = "Message-Id:" ]; then
 					logit "relearn spam Message-Id: $signature"
@@ -86,8 +86,9 @@ relearn)
 				fi
 				logit "relearn spam h=$header s=$signature (calling sigstash)"
 				echo $signature
-			done | dspam_sigstash spam
-		}
+			done
+			exit 0
+		) | dspam_sigstash spam
 	;;
 	ham)
 		egrep "^X-DSPAM-Signature|^Message-Id" | {
