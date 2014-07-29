@@ -33,28 +33,24 @@ if ($verbose > 0) {
 }
 
 #printf "action = %s, sig = %s\n", $action, $sig;
-our $dsn = "dbi:SQLite:dbname=/var/dspam/sigdb/sigs.db";
+our $dsn = "dbi:Pg:dbname=dspam;host=db.freedaemonhosting.com";
 
-our $dsnpg = "dbi:Pg:dbname=dspam;host=db.freedaemonhosting.com";
-
-my $db = FDC::db->new($dsn,"","") ||
+my $db = FDC::db->new($dsn,"dspam","") ||
 	die "Could not open $dsn: $@";
-my $dbpg = FDC::db->new($dsnpg,"dspam","") ||
-	die "Could not open $dsnpg: $@";
 my $dbh = $db->getdbh();
 my @tables = $dbh->tables();
 
-my $sigtab = "signatures";
+my $sigtab = "fdhsignatures";
 my $create_sigtab = 1;
 foreach my $tname (@tables) {
-	if ($tname =~ m/\"${sigtab}\"/) {
+	if ($tname =~ m/${sigtab}/) {
 		$create_sigtab = 0;
 	}
 }
 
 my $query;
 if ($create_sigtab > 0) {
-	$query = "CREATE TABLE ${sigtab} (id integer PRIMARY KEY AUTOINCREMENT, ".
+	$query = "CREATE TABLE ${sigtab} (id serial, ".
 	    "action varchar(16), sig varchar(28))";
 	$db->doquery($query, 'create') || die "Unable to create ${sigtab}: $@";
 }
@@ -85,7 +81,7 @@ while (($id, $act, $sig) = $sth->fetchrow_array) {
 	$uid =~ s/,.*$//;
 
 	my $q = "select username from dspam_virtual_uids where uid=$uid";
-	my ($user) = $dbpg->do_oneret_query($q);
+	my ($user) = $db->do_oneret_query($q);
 	printf "%3d. id %d, action %s, sig %s, user %s\n",
 	    ++$count, $id, $act, $sig, $user;
 	if ($act eq "innocent" || $act eq "spam") {
@@ -104,6 +100,7 @@ $sth->finish;
 # an error?
 $query = "delete from signatures where ";
 
+printf "About to delete %d signatures just processed\n", scalar(@rmids);
 
 my $qrmid;
 for $id (@rmids) {
