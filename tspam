@@ -85,8 +85,8 @@ relearn)
 					continue
 				fi
 				logit "relearn spam h=$header s=$signature (calling sigstash)"
-				dspam_sigstash spam $signature
-			done
+				echo $signature
+			done | dspam_sigstash spam
 		}
 	;;
 	ham)
@@ -97,8 +97,8 @@ relearn)
 					continue
 				fi
 				logit "relearn ham h=$header s=$signature (calling sigstash)"
-				dspam_sigstash innocent $signature
-			done
+				echo $signature
+			done | dspam_sigstash innocent
 		}
 	;;
 	inoculation)
