@@ -19,6 +19,7 @@ use warnings;
 
 use FDC::db;
 use DBI qw(:sql_types);
+use Sys::Syslog qw(:standard :macros);
 
 use OpenBSD::Getopt;
 
@@ -28,14 +29,16 @@ getopts('v');
 
 our $verbose = $opt_v;
 
-if ($verbose > 0) {
-	$| = 1; # Enable autoflush, to help with ordered output/debugging
-}
+openlog("dspam_sigstash", "ndelay,pid", "mail");
 
 our $dsn = "dbi:Pg:dbname=dspam;host=db.freedaemonhosting.com";
 
-my $db = FDC::db->new($dsn,"dspam","") ||
+my $db;
+$db = FDC::db->new($dsn,"dspam","");
+if (!defined($db)) {
+	syslog(LOG_INFO, "Could not open dsn: $dsn: $@");
 	die "Could not open $dsn: $@";
+}
 my $dbh = $db->getdbh();
 my @tables = $dbh->tables();
 
@@ -66,12 +69,22 @@ if ($create_inoctab > 0) {
 }
 
 my $action = shift @ARGV;
-my @sigs = @ARGV;
-if (!@sigs) {
-	@sigs = <stdin>;
+
+
+my @sigs = ();
+if (defined($ARGV[0])) {
+	@sigs = @ARGV;
+} else {
+	my $line;
+	while (<stdin>) {
+		chomp($line = $_);
+		push @sigs,$line;
+		if ($verbose > 0) {
+			syslog(LOG_INFO, sprintf("Added sig '%s'",$line));
+		}
+	}
 }
-while (@sigs) {
-	my $sig = shift @ARGV;
+foreach my $sig (@sigs) {
 
 	my $sth;
 	if ($action eq "inoculation") {
@@ -84,9 +97,12 @@ while (@sigs) {
 		$sth->bind_param(1, $message, SQL_CHAR);
 		$sth->execute;
 	} else {
+		if (!defined($sig)) {
+			next;
+		}
 		$query = sprintf "INSERT into %s (action, sig) values ('%s', '%s')", $sigtab, $action, $sig;
 		if ($verbose > 0) {
-			printf STDERR "query: %s\n",$query;
+			syslog(LOG_INFO, sprintf("query: %s\n",$query));
 		}
 		while (1) {
 			if (! ($sth = $db->doquery($query, 'insert sig'))) {
