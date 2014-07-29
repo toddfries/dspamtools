@@ -18,57 +18,18 @@ PATH=$PATH:/usr/local/sbin
 
 logdir=/var/dspam
 
-# give longer running tspam processes a chance to start if one or more
-# dspamc programs are already running
-max=3
-maxtries=$(( 300 + $RANDOM % 150 ))
-i=0
 start=$(date +"%m%d %H:%M:%S")
 starts=$(date +%s)
-count=$(( $(pgrep dspamc|wc -w) + 0 ))
 log() {
 	echo "$@" | /usr/bin/logger -p daemon.info -t tspam
 }
 logit() {
 	log "$$: $@"
 }
-logit "$@ (start) dspamc=$count maxtries=$maxtries"
-[ count -gt 0 ] && sleep $(( 2 + $RANDOM % 3 ))
-
-# do not run duplicate dspamc clients, the MTA should retry
-while [ i -lt maxtries ]
-do
-	count=$(( $(pgrep dspamc|wc -w) + 0 ))
-	if [ count -lt max ]; then
-		break
-	fi
-	sleep $(( $RANDOM % 2 )).$(( 0 + $RANDOM % 10 ))
-	let i=i+1
-done
-if ! [ count -lt max ]; then
-	stops=$(date +%s)
-	logit "$@ (giving up), after $i tries ($((stops-starts))s) since $start, exiting 75"
-	#cat > /dev/null
-	#sleep 5
-	exit 75
-fi
 
 ret=0
 
-# XXX warning do not edit while running
-
-#if ! [ "${exec_success_tspam}" = "true" ]; then
-#        export exec_success_tspam=true
-        export td=$(mktemp -d /tmp/tspam.XXXXXXXXXXXX)
-#        cp $0 $td/tspam
-#	echo $$ > $td/pid
-#        exec $td/tspam "$@"
-#        echo "SHOULD NOT BE HERE SOMETHING WENT WRONG"
-#        exit 1
-#else
-#	unset exec_success_tspam
-#fi
-
+export td=$(mktemp -d /tmp/tspam.XXXXXXXXXXXX)
 
 mode=toe  # static, learn only on mistake.., MUCH faster
 mode=tum  # hybrid
@@ -104,7 +65,7 @@ dodspam() {
 	oldret=$ret
 	[ wc -gt ret ] && ret=$wc
 	stops=$(date +%s)
-	logit "$scriptargs time=$((mids-starts)):$((stops-mids)):$((stops-starts)) r=$oldret:$ret l=$LOGNAME u=$user t=$i"
+	logit "$scriptargs time=$((mids-starts)):$((stops-mids)):$((stops-starts)) r=$oldret:$ret l=$LOGNAME u=$user"
 
 	return $ret
 }
@@ -115,7 +76,6 @@ filter)
 ;;
 relearn)
 	shift
-	args="--source=error --mode=$mode --user $user"
 	case "$1" in
 	spam)
 		egrep "^X-DSPAM-Signature|^Message-Id" | {
@@ -125,7 +85,6 @@ relearn)
 					continue
 				fi
 				logit "relearn spam h=$header s=$signature (calling sigstash)"
-				#dodspam --class=spam $args --signature="$signature"
 				dspam_sigstash spam $signature
 			done
 		}
@@ -138,13 +97,11 @@ relearn)
 					continue
 				fi
 				logit "relearn ham h=$header s=$signature (calling sigstash)"
-				#dodspam --class=innocent $args --signature="$signature"
 				dspam_sigstash innocent $signature
 			done
 		}
 	;;
 	inoculation)
-		#dodspam --process --class=spam --source=inoculation --user $user
 		dspam_sigstash inoculation
 	;;
 	esac
@@ -165,11 +122,10 @@ esac
 rm -rf -- $td
 
 if [ ret -gt 0 ]; then
-	#sleep 200
 	cat > /dev/null
 	stops=$(date +%s)
-	logit "(stop) ret=$ret start=$start tries=$i time=($stops - $starts)=>$((stops-starts))s exit=75"
+	logit "(stop) ret=$ret start=$start time=($stops - $starts)=>$((stops-starts))s exit=75"
 	exit 75 # EX_TEMPFAIL for the MTA to retry
 fi
-logit "(stop) ret=$ret start=$start tries=$i time=$((stops-starts))s exit=0"
+logit "(stop) ret=$ret start=$start time=$((stops-starts))s exit=0"
 exit 0
