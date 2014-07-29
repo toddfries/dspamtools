@@ -110,6 +110,8 @@ for $id (@rmids) {
 		$sth->finish;
 	}
 }
-$db->doquery("vacuum");
+# if(sqlite) {
+#$db->doquery("vacuum");
+# }
 $dbh->disconnect;
 exit(0);
