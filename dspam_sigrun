@@ -59,7 +59,7 @@ $query = sprintf "SELECT count(id) from %s", $sigtab;
 my $sth = $db->doquery($query);
 my ($count) = $sth->fetchrow_array;
 $sth->finish;
-printf "Processing %d rows\n",$count;
+printf "Processing %d signatures\n",$count;
 
 $query = sprintf "SELECT id, action, sig from %s", $sigtab;
 if ($verbose > 0) {
