@@ -100,20 +100,24 @@ $sth->finish;
 # an error?
 $query = "delete from ${sigtab} where ";
 
-printf "Deleting %d signatures.", scalar(@rmids);
+my $idcount = scalar(@rmids);
 
-my $qrmid;
-for $id (@rmids) {
-	$qrmid = "$query id = $id";
-	$sth = $db->doquery($qrmid);
-	if (defined($sth)) {
-		$sth->finish;
+if ($idcount > 0) {
+	printf "Deleting %d signatures.", $idcount;
+
+	my $qrmid;
+	for $id (@rmids) {
+		$qrmid = "$query id = $id";
+		$sth = $db->doquery($qrmid);
+		if (defined($sth)) {
+			$sth->finish;
+		}
+		print ".";
 	}
-	print ".";
+	print " done.\n";
 }
 # if(sqlite) {
 #$db->doquery("vacuum");
 # }
 $dbh->disconnect;
-print " done.\n";
 exit(0);
