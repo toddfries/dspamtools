@@ -1,4 +1,4 @@
-bins=  dspam_mboxparse dspamc_wrapper
+bins=  dspam_mboxparse dspamc_wrapper dspam_redeliver
 sbins= dspam_sigrun dspam_sigstash tspam cleandspamdb
 
 install:
