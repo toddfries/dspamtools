@@ -82,8 +82,8 @@ while (($id, $act, $sig) = $sth->fetchrow_array) {
 
 	my $q = "select username from dspam_virtual_uids where uid=$uid";
 	my ($user) = $db->do_oneret_query($q);
-	printf "%3d. id %d, action %s, sig %s, user %s\n",
-	    ++$count, $id, $act, $sig, $user;
+	printf "%3d. retrain as %s sig %s for user %s\n",
+	    ++$count, $act, $sig, $user;
 	if ($act eq "innocent" || $act eq "spam") {
 		my $cmd = sprintf "/usr/local/bin/dspamc --class=%s --source=error --mode=teft --user %s --signature=%s",$act,$user,$sig;
 		if ($verbose > 0) {
