@@ -185,6 +185,7 @@ sub dspam_classify {
 		}
 	}
 	close(M);
+	system("rm -rf ${td}");
 
 	if (!defined($sig) || !defined($res)) {
 		print STDERR "Failed to get sig or result\n";
@@ -196,7 +197,8 @@ sub dspam_classify {
 		return;
 	}
 	print STDERR "Running sigstash to re-train\n";
-	printf STDERR "dspam_sigstash %s %s\n", $action, $sig;
+	my $cmd = sprintf "dspam_sigstash %s %s\n", $action, $sig;
+	print STDERR $cmd;
 }
 
 init_state();
@@ -231,7 +233,8 @@ while (<STDIN>) {
 				if ($action eq "none") {
 					next;
 				}
-				print STDERR "dspam_sigstash ",$action," ",$sig,"\n";
+				my $cmd = sprintf "dspam_sigstash %s %s\n",$action,$sig;
+				print STDERR $cmd;
 				next;
 			}
 			print STDERR "Skipping message, no receipient found\n";
