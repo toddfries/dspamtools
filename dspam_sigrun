@@ -59,7 +59,7 @@ $query = sprintf "SELECT count(id) from %s", $sigtab;
 my $sth = $db->doquery($query);
 my ($count) = $sth->fetchrow_array;
 $sth->finish;
-printf "About to process %d rows\n",$count;
+printf "Processing %d rows\n",$count;
 
 $query = sprintf "SELECT id, action, sig from %s", $sigtab;
 if ($verbose > 0) {
@@ -100,7 +100,7 @@ $sth->finish;
 # an error?
 $query = "delete from ${sigtab} where ";
 
-printf "About to delete %d signatures just processed\n", scalar(@rmids);
+printf "Deleting %d signatures.", scalar(@rmids);
 
 my $qrmid;
 for $id (@rmids) {
@@ -109,9 +109,11 @@ for $id (@rmids) {
 	if (defined($sth)) {
 		$sth->finish;
 	}
+	print ".";
 }
 # if(sqlite) {
 #$db->doquery("vacuum");
 # }
 $dbh->disconnect;
+print " done.\n";
 exit(0);
