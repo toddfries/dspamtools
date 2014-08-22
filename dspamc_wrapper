@@ -46,7 +46,7 @@ if (!defined($rcpt) || !defined($envfrom)) {
 }
 
 if ($scan == 1 && defined($skiptore)) {
-	if ($rcpt =~ m/${skiptore}/) {
+	if ($rcpt =~ m/${skiptore}/i) {
 		$scan = 0;
 	}
 }
@@ -64,7 +64,7 @@ if ($scan) {
 	$SIG{'PIPE'} = 'IGNORE';
 
 	my $cmd = sprintf "%s --client --stdout --deliver=innocent,spam --user %s",
-	    "/usr/local/bin/dspamc",$rcpt;
+	    "/usr/local/bin/dspamc",lc($rcpt);
 	if ($verbose > 0) {
 		syslog(LOG_INFO,sprintf("cmd=%d\n",$cmd));
 	}
