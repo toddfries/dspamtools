@@ -58,7 +58,7 @@ if ($scan == 1 && defined($skiptore)) {
 }
 
 
-my ($fhread, $fhwrite);
+our ($fhread, $fhwrite);
 our $pid;
 if ($verbose > 0) {
 	syslog(LOG_INFO, sprintf("scan=%d\n",$scan));
@@ -86,6 +86,8 @@ if ($scan) {
 	$SIG{'TERM'} = sub {
 		my $signame = shift;
 		syslog(LOG_INFO,"Got %s, killing child pid %d", $signame, $pid);
+		closefhwrite();
+		$fhread->close();
 		kill('KILL', $pid);
 		exit(75);
 	};
@@ -154,13 +156,7 @@ if ($verbose > 0) {
 	print STDERR "STDIN reading done\n";
 }
 if ($scan) {
-	eval {
-		$fhwrite->flush();
-		$fhwrite->close();
-	};
-	if ($@) {
-		syslog(LOG_INFO,sprintf("FHWRITE failed: %s\n",$@));
-	}
+	closefhwrite();
 
 	# states:
 	#
@@ -204,9 +200,9 @@ if ($scan) {
 
 	my $bsent;
 	if ($scansize < $msgsize) {
-		$bsent = sprintf("%d",$scansize);
-	} else {
 		$bsent = sprintf("%d/%d",$scansize,$msgsize);
+	} else {
+		$bsent = sprintf("%d",$scansize);
 	}
 	syslog(LOG_INFO,sprintf("ret=%d: sent %sb in %ds, %0.3fb/s", $ret, $bsent, $totaltime, $scansize/$totaltime));
 
@@ -223,3 +219,13 @@ if ($scan) {
 }
 closelog();
 exit(0);
+
+sub closefhwrite {
+	eval {
+		$fhwrite->flush();
+		$fhwrite->close();
+	};
+	if ($@) {
+		syslog(LOG_INFO,sprintf("FHWRITE failed: %s\n",$@));
+	}
+}
