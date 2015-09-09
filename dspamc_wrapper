@@ -19,10 +19,11 @@ use warnings;
 
 use Sys::Syslog qw(:standard :macros);
 
+openlog("dspamc_wrapper", "ndelay", "mail");
 # Is there a better way to insert a header than to futz in this way?
 
 my $verbose = 0;
-if ($ARGV[0] eq "-v") {
+if (defined($ARGV[0]) && $ARGV[0] eq "-v") {
 	shift @ARGV;
 }
 
@@ -54,10 +55,12 @@ if ($scan == 1 && defined($skiptore)) {
 
 openlog("dspamc_wrapper", "ndelay,pid", "mail");
 
-my ($fhread, $fhwrite, $pid);
+my ($fhread, $fhwrite);
+our $pid;
 if ($verbose > 0) {
 	syslog(LOG_INFO, sprintf("scan=%d\n",$scan));
 }
+
 if ($scan) {
 	use IPC::Open2;
 	use FileHandle;
@@ -77,12 +80,18 @@ if ($scan) {
 	if ($verbose > 0) {
 		syslog(LOG_INFO,sprintf("pid=%d\n",$pid));
 	}
+	$SIG{'TERM'} = sub {
+		my $signame = shift;
+		syslog(LOG_INFO,"Got %s, killing child pid %d", $signame, $pid);
+		kill('KILL', $pid);
+	};
 }
 my @headers;
 my @body;
 my $state = 0; # 0 = headers, 1 = body
 my $linecount = 0;
 my $msgsize = 0;
+my $scansize = 0;
 while(<STDIN>) {
 	my $line = $_;
 	$msgsize += length($line);
@@ -128,6 +137,7 @@ while(<STDIN>) {
 	}
 	push @body,$line;
 	if ($scan && $msgsize < $maxmessagesize) {
+		$scansize = $msgsize;
 		eval {
 			$fhwrite->print($_);
 		};
@@ -136,6 +146,7 @@ while(<STDIN>) {
 		}
 	}
 }
+syslog(LOG_INFO,sprintf("sent %d/%d bytes to dspamc", $scansize, $msgsize));
 if ($verbose > 0) {
 	print STDERR "STDIN reading done\n";
 }
@@ -197,4 +208,5 @@ if ($scan) {
 	}
 	exit(1);
 }
+closelog();
 exit(0);
