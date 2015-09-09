@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright (c) 2012 Todd T. Fries <todd@fries.net>
+# Copyright (c) 2012,2015 Todd T. Fries <todd@fries.net>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -33,6 +33,7 @@ my $config_file = "/etc/dspamwrap.conf";
 
 my $skiptore;
 my $scan = 1;
+my $maxmessagesize = 1048576;
 
 if (-f $config_file) {
 	eval {
@@ -81,8 +82,10 @@ my @headers;
 my @body;
 my $state = 0; # 0 = headers, 1 = body
 my $linecount = 0;
+my $msgsize = 0;
 while(<STDIN>) {
 	my $line = $_;
+	$msgsize += length($line);
 	if ($verbose > 0 && ($linecount++ % 1000) == 0) {
 		syslog(LOG_INFO,sprintf("made it to line %d\n",$linecount));
 	}
@@ -124,7 +127,7 @@ while(<STDIN>) {
 		next;
 	}
 	push @body,$line;
-	if ($scan) {
+	if ($scan && $msgsize < $maxmessagesize) {
 		eval {
 			$fhwrite->print($_);
 		};
