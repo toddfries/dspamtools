@@ -87,6 +87,7 @@ if ($scan) {
 		my $signame = shift;
 		syslog(LOG_INFO,"Got %s, killing child pid %d", $signame, $pid);
 		kill('KILL', $pid);
+		exit(75);
 	};
 }
 my @headers;
@@ -201,7 +202,13 @@ our $totaltime = $stoptime - $starttime;
 if ($scan) {
 	my $ret = waitpid($pid, 0);
 
-	syslog(LOG_INFO,sprintf("ret=%d: sent %d/%db in %ds, %0.3fb/s", $ret, $scansize, $msgsize, $totaltime, $scansize/$totaltime));
+	my $bsent;
+	if ($scansize < $msgsize) {
+		$bsent = sprintf("%d",$scansize);
+	} else {
+		$bsent = sprintf("%d/%d",$scansize,$msgsize);
+	}
+	syslog(LOG_INFO,sprintf("ret=%d: sent %sb in %ds, %0.3fb/s", $ret, $bsent, $totaltime, $scansize/$totaltime));
 
 	if ($verbose > 0) {
 		syslog(LOG_INFO,sprintf("waitpid returned %d: status=$? native=${^CHILD_ERROR_NATIVE}\n",$ret));
