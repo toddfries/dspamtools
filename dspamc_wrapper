@@ -19,7 +19,9 @@ use warnings;
 
 use Sys::Syslog qw(:standard :macros);
 
-openlog("dspamc_wrapper", "ndelay", "mail");
+openlog("dspamc_wrapper", "ndelay,pid", "mail");
+our $starttime = time();
+
 # Is there a better way to insert a header than to futz in this way?
 
 my $verbose = 0;
@@ -47,13 +49,14 @@ if (!defined($rcpt) || !defined($envfrom)) {
 	exit(1);
 }
 
+syslog(LOG_INFO, sprintf("%s -> %s", $envfrom, $rcpt));
+
 if ($scan == 1 && defined($skiptore)) {
 	if ($rcpt =~ m/${skiptore}/i) {
 		$scan = 0;
 	}
 }
 
-openlog("dspamc_wrapper", "ndelay,pid", "mail");
 
 my ($fhread, $fhwrite);
 our $pid;
@@ -146,7 +149,6 @@ while(<STDIN>) {
 		}
 	}
 }
-syslog(LOG_INFO,sprintf("sent %d/%d bytes to dspamc", $scansize, $msgsize));
 if ($verbose > 0) {
 	print STDERR "STDIN reading done\n";
 }
@@ -194,9 +196,13 @@ foreach my $b (@body) {
 	printf "%s", $b;
 }
 
+our $stoptime = time();
+our $totaltime = $stoptime - $starttime;
 if ($scan) {
 	my $ret = waitpid($pid, 0);
-	
+
+	syslog(LOG_INFO,sprintf("ret=%d: sent %d/%db in %ds, %0.3fb/s", $ret, $scansize, $msgsize, $totaltime, $scansize/$totaltime));
+
 	if ($verbose > 0) {
 		syslog(LOG_INFO,sprintf("waitpid returned %d: status=$? native=${^CHILD_ERROR_NATIVE}\n",$ret));
 	}
@@ -206,7 +212,7 @@ if ($scan) {
 	if ($ret == -1) {
 		exit(0);
 	}
-	exit(1);
+	exit(75); # tempfail
 }
 closelog();
 exit(0);
