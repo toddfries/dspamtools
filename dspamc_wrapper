@@ -82,7 +82,9 @@ if ($scan) {
 
 	$pid = open2($fhread,$fhwrite,${cmd});
 	if (!defined($pid)) {
-		die "Can't fork: $!";
+		my $msg=$!;
+		syslog(LOG_INFO,"Can't fork: %s",$msg);
+		exit(75); # tempfail
 	}
 	if ($verbose > 0) {
 		syslog(LOG_INFO,sprintf("pid=%d\n",$pid));
@@ -198,10 +200,11 @@ if ($scan) {
 	$fhread->close();
 	};
 	if ($@) {
-		syslog(LOG_INFO,sprintf("FHREAD failed: %s\n",$@));
+		syslog(LOG_INFO,"FHREAD failed: %s",$@);
+		exit(75);
 	}
 	if ($verbose>0) {
-		syslog(LOG_INFO,"<\$fhread> = EOF");
+		syslog(LOG_INFO,"FHREAD succeeded");
 	}
 }
 foreach my $h (@headers) {
@@ -217,14 +220,22 @@ our $stoptime = time();
 our $totaltime = $stoptime - $starttime;
 if ($scan) {
 	my $ret = waitpid($pid, 0);
-
+	if ($verbose>0) {
+		syslog(LOG_INFO,"vars: sansize=$scansize, msgsize=$msgsize, ret=$ret, totaltime=$totaltime");
+	}
 	my $bsent;
 	if ($scansize < $msgsize) {
 		$bsent = sprintf("%d/%d",$scansize,$msgsize);
 	} else {
 		$bsent = sprintf("%d",$scansize);
 	}
-	syslog(LOG_INFO,sprintf("ret=%d: sent %sb in %ds, %0.3fb/s", $ret, $bsent, $totaltime, $scansize/$totaltime));
+	my $speed;
+	if ($totaltime == 0) {
+		$speed = "inf";
+	} else {
+		$speed = sprintf("0.3f",$scansize/$totaltime);
+	}
+	syslog(LOG_INFO,"ret=%d: sent %sb in %ds, %sb/s", $ret, $bsent, $totaltime, $speed);
 
 	if ($verbose > 0) {
 		syslog(LOG_INFO,sprintf("waitpid returned %d: status=$? native=${^CHILD_ERROR_NATIVE}\n",$ret));
