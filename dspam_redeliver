@@ -25,6 +25,10 @@ do
 	esac
 	shift
 done
+if ! [ "$user" ]; then
+	echo "must specify '-u <user>' on the command line"
+	exit 1
+fi
 
 while :
 do
@@ -38,7 +42,7 @@ do
 			continue
 		fi
 		echo "$USER handling $f"
-		mv $f $tmpmbox && touch $f
+		ln $f $tmpmbox && touch ${f}.tmp && mv ${f}.tmp ${f}
 		/usr/local/bin/dspam_mboxparse -v -P -t $user < $tmpmbox
 		sleep $(($RANDOM%5))
 	done
