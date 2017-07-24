@@ -24,8 +24,9 @@ our $starttime = time();
 
 # Is there a better way to insert a header than to futz in this way?
 
-my $verbose = 0;
+our $verbose = 0;
 if (defined($ARGV[0]) && $ARGV[0] eq "-v") {
+	$verbose++;
 	shift @ARGV;
 }
 
@@ -43,13 +44,16 @@ if (-f $config_file) {
 		eval `cat $config_file`;
 	}
 }
+if ($verbose>0) {
+	syslog(LOG_INFO, "past conf file\n");
+}
 
 if (!defined($rcpt) || !defined($envfrom)) {
 	print STDERR "Usage: dspamc_wrapper <rcpt> <from>\n";
 	exit(1);
 }
 
-syslog(LOG_INFO, sprintf("%s -> %s", $envfrom, $rcpt));
+syslog(LOG_INFO, "%s -> %s", $envfrom, $rcpt);
 
 if ($scan == 1 && defined($skiptore)) {
 	if ($rcpt =~ m/${skiptore}/i) {
@@ -61,7 +65,7 @@ if ($scan == 1 && defined($skiptore)) {
 our ($fhread, $fhwrite);
 our $pid;
 if ($verbose > 0) {
-	syslog(LOG_INFO, sprintf("scan=%d\n",$scan));
+	syslog(LOG_INFO, "scan=%d", $scan);
 }
 
 if ($scan) {
@@ -73,12 +77,14 @@ if ($scan) {
 	my $cmd = sprintf "%s --client --stdout --deliver=innocent,spam --user %s",
 	    "/usr/local/bin/dspamc",lc($rcpt);
 	if ($verbose > 0) {
-		syslog(LOG_INFO,sprintf("cmd=%d\n",$cmd));
+		syslog(LOG_INFO,sprintf("cmd=%s\n",$cmd));
 	}
 
 	$pid = open2($fhread,$fhwrite,${cmd});
 	if (!defined($pid)) {
-		die "Can't fork: $!";
+		my $msg=$!;
+		syslog(LOG_INFO,"Can't fork: %s",$msg);
+		exit(75); # tempfail
 	}
 	if ($verbose > 0) {
 		syslog(LOG_INFO,sprintf("pid=%d\n",$pid));
@@ -110,7 +116,7 @@ while(<STDIN>) {
 			$state++;
 			if ($scan) {
 				if ($verbose > 0) {
-					syslog(LOG_INFO,sprintf("pre-fhwrite: %s",$_));
+					syslog(LOG_INFO,"pre-fhwrite: %s",$_);
 				}
 				eval {
 					$fhwrite->print($_);
@@ -130,16 +136,22 @@ while(<STDIN>) {
 			push @headers,$line;
 			next;
 		}
+		if ($verbose>1) {
+			syslog(LOG_INFO,"+header: %s",$line);
+		}
 		push @headers,$line;
 		if ($scan) {
 			eval {
 				$fhwrite->print($_);
 			};
 			if ($@) {
-				syslog(LOG_INFO,sprintf("FHWRITE failed: %s\n",$@));
+				syslog(LOG_INFO,"FHWRITE failed: %s",$@);
 			}
 		}
 		next;
+	}
+	if ($verbose>1) {
+		syslog(LOG_INFO,"+body: %s", $line);
 	}
 	push @body,$line;
 	if ($scan && $msgsize < $maxmessagesize) {
@@ -153,10 +165,13 @@ while(<STDIN>) {
 	}
 }
 if ($verbose > 0) {
-	print STDERR "STDIN reading done\n";
+	syslog(LOG_INFO,"STDIN reading done");
 }
 if ($scan) {
 	closefhwrite();
+	if ($verbose>0) {
+		syslog(LOG_INFO,"closefhwrite()");
+	}
 
 	# states:
 	#
@@ -167,11 +182,15 @@ if ($scan) {
 	$state = 0;
 	eval {
 	while(<$fhread>) {
+		my $h = $_;
+		if ($verbose>0) {
+			syslog(LOG_INFO,"<\$fhread>");
+		}
 		if ($state == 0) {
-			if (/^X-DSPAM/) {
-				push @headers,$_;
+			if ($h =~ /^X-DSPAM/) {
+				push @headers,$h;
 			}
-			if (/^$/) {
+			if ($h =~ /^$/) {
 				$state++;
 				last;
 			}
@@ -181,7 +200,11 @@ if ($scan) {
 	$fhread->close();
 	};
 	if ($@) {
-		syslog(LOG_INFO,sprintf("FHREAD failed: %s\n",$@));
+		syslog(LOG_INFO,"FHREAD failed: %s",$@);
+		exit(75);
+	}
+	if ($verbose>0) {
+		syslog(LOG_INFO,"FHREAD succeeded");
 	}
 }
 foreach my $h (@headers) {
@@ -197,14 +220,22 @@ our $stoptime = time();
 our $totaltime = $stoptime - $starttime;
 if ($scan) {
 	my $ret = waitpid($pid, 0);
-
+	if ($verbose>0) {
+		syslog(LOG_INFO,"vars: sansize=$scansize, msgsize=$msgsize, ret=$ret, totaltime=$totaltime");
+	}
 	my $bsent;
 	if ($scansize < $msgsize) {
 		$bsent = sprintf("%d/%d",$scansize,$msgsize);
 	} else {
 		$bsent = sprintf("%d",$scansize);
 	}
-	syslog(LOG_INFO,sprintf("ret=%d: sent %sb in %ds, %0.3fb/s", $ret, $bsent, $totaltime, $scansize/$totaltime));
+	my $speed;
+	if ($totaltime == 0) {
+		$speed = "inf";
+	} else {
+		$speed = sprintf("0.3f",$scansize/$totaltime);
+	}
+	syslog(LOG_INFO,"ret=%d: sent %sb in %ds, %sb/s", $ret, $bsent, $totaltime, $speed);
 
 	if ($verbose > 0) {
 		syslog(LOG_INFO,sprintf("waitpid returned %d: status=$? native=${^CHILD_ERROR_NATIVE}\n",$ret));
