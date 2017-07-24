@@ -231,9 +231,9 @@ if ($scan) {
 	}
 	my $speed;
 	if ($totaltime == 0) {
-		$speed = "inf";
+		$speed = "<inf>";
 	} else {
-		$speed = sprintf("0.3f",$scansize/$totaltime);
+		$speed = sprintf("%0.3f",$scansize/$totaltime);
 	}
 	syslog(LOG_INFO,"ret=%d: sent %sb in %ds, %sb/s", $ret, $bsent, $totaltime, $speed);
 
