@@ -34,6 +34,10 @@ if ($verbose > 0) {
 
 #printf "action = %s, sig = %s\n", $action, $sig;
 our $dsn = "dbi:Pg:dbname=dspam;host=db.freedaemonhosting.com";
+my $conf = "$ENV{HOME}/.dspamsig.conf";
+if (-f $conf) {
+        eval `cat $conf`;
+}
 
 my $db = FDC::db->new($dsn,"dspam","") ||
 	die "Could not open $dsn: $@";

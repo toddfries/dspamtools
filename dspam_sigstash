@@ -33,6 +33,11 @@ openlog("dspam_sigstash", "ndelay,pid", "mail");
 
 our $dsn = "dbi:Pg:dbname=dspam;host=db.freedaemonhosting.com";
 
+my $conf = "$ENV{HOME}/.dspamsig.conf";
+if (-f $conf) {
+	eval `cat $conf`;
+}
+
 my $db;
 $db = FDC::db->new($dsn,"dspam","");
 if (!defined($db)) {
